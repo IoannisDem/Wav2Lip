@@ -29,6 +29,7 @@ parser.add_argument("--preprocessed_root", help="Root folder of the preprocessed
 
 args = parser.parse_args()
 
+# instatiating multiple face detection models
 fa = [face_detection.FaceAlignment(face_detection.LandmarksType._2D, flip_input=False, 
 									device='cuda:{}'.format(id)) for id in range(args.ngpu)]
 
@@ -36,6 +37,13 @@ template = 'ffmpeg -loglevel panic -y -i {} -strict -2 {}'
 # template2 = 'ffmpeg -hide_banner -loglevel panic -threads 1 -y -i {} -async 1 -ac 1 -vn -acodec pcm_s16le -ar 16000 {}'
 
 def process_video_file(vfile, args, gpu_id):
+	'''
+	vfile (str): path to .mp4 file
+	args (parser): see above
+	gpu_id: gpu selected, whe using threading
+
+	Extract face from each frame of the video
+	'''
 	video_stream = cv2.VideoCapture(vfile)
 	
 	frames = []
@@ -52,6 +60,7 @@ def process_video_file(vfile, args, gpu_id):
 	fulldir = path.join(args.preprocessed_root, dirname, vidname)
 	os.makedirs(fulldir, exist_ok=True)
 
+	# split frames into batches before passing to the model
 	batches = [frames[i:i + args.batch_size] for i in range(0, len(frames), args.batch_size)]
 
 	i = -1
@@ -62,11 +71,18 @@ def process_video_file(vfile, args, gpu_id):
 			i += 1
 			if f is None:
 				continue
-
+			
+			# extract face from the frames and store locally
 			x1, y1, x2, y2 = f
 			cv2.imwrite(path.join(fulldir, '{}.jpg'.format(i)), fb[j][y1:y2, x1:x2])
 
 def process_audio_file(vfile, args):
+	'''
+	vfile (str): path to .mp4 file
+	args (parser): see above
+
+	Extract audio from video 
+	'''
 	vidname = os.path.basename(vfile).split('.')[0]
 	dirname = vfile.split('/')[-2]
 
@@ -76,12 +92,13 @@ def process_audio_file(vfile, args):
 	wavpath = path.join(fulldir, 'audio.wav')
 
 	command = template.format(vfile, wavpath)
-	subprocess.call(command, shell=True)
+	subprocess.call(command, shell=True) # ffmpeg commnand to convert .mp4 to .wav
 
 	
 def mp_handler(job):
 	vfile, args, gpu_id = job
 	try:
+		# extract faces from each frame
 		process_video_file(vfile, args, gpu_id)
 	except KeyboardInterrupt:
 		exit(0)
@@ -95,6 +112,8 @@ def main(args):
 
 	jobs = [(vfile, args, i%args.ngpu) for i, vfile in enumerate(filelist)]
 	p = ThreadPoolExecutor(args.ngpu)
+
+	# extract faces from each frame
 	futures = [p.submit(mp_handler, j) for j in jobs]
 	_ = [r.result() for r in tqdm(as_completed(futures), total=len(futures))]
 
@@ -102,6 +121,7 @@ def main(args):
 
 	for vfile in tqdm(filelist):
 		try:
+			# extract audio from video
 			process_audio_file(vfile, args)
 		except KeyboardInterrupt:
 			exit(0)
