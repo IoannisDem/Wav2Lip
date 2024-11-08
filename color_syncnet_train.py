@@ -31,19 +31,30 @@ global_epoch = 0
 use_cuda = torch.cuda.is_available()
 print('use_cuda: {}'.format(use_cuda))
 
-syncnet_T = 5
-syncnet_mel_step_size = 16
+syncnet_T = 5 # define window size for ......
+syncnet_mel_step_size = 16 # window size equivalent for mel spectrogram = 80 * (syncnet_T/fps)
 
 class Dataset(object):
     def __init__(self, split):
+        # list of paths for the processed videos (frames + audio)
         self.all_videos = get_image_list(args.data_root, split)
 
     def get_frame_id(self, frame):
+        '''
+        frame (str): frame path (.jpg)
+
+        return frame name (frame number)
+        '''
         return int(basename(frame).split('.')[0])
 
     def get_window(self, start_frame):
-        start_id = self.get_frame_id(start_frame)
-        vidname = dirname(start_frame)
+        '''
+        start_frame (str): frame path (.jpg)
+
+        reurn a list of frame paths with window size = syncnet_T
+        '''
+        start_id = self.get_frame_id(start_frame) # get frame number
+        vidname = dirname(start_frame) # get direcrory name of image
 
         window_fnames = []
         for frame_id in range(start_id, start_id + syncnet_T):
@@ -54,6 +65,12 @@ class Dataset(object):
         return window_fnames
 
     def crop_audio_window(self, spec, start_frame):
+        '''
+        spec (numpy.array): melspectrogram 113x80
+        start_frmae (str): frame path (.jpg)
+
+        return portion of mel spectorgram relevant to selected frame window
+        '''
         # num_frames = (T x hop_size * fps) / sample_rate
         start_frame_num = self.get_frame_id(start_frame)
         start_idx = int(80. * (start_frame_num / float(hparams.fps)))
@@ -69,11 +86,16 @@ class Dataset(object):
     def __getitem__(self, idx):
         while 1:
             idx = random.randint(0, len(self.all_videos) - 1)
-            vidname = self.all_videos[idx]
-
+            vidname = self.all_videos[idx] # select a random video
+            
+            # list of extracted frames
             img_names = list(glob(join(vidname, '*.jpg')))
+
+            # if num of frames less than a threshold skip the iteration
             if len(img_names) <= 3 * syncnet_T:
                 continue
+            
+            # choose a correct and wrong image (full path)
             img_name = random.choice(img_names)
             wrong_img_name = random.choice(img_names)
             while wrong_img_name == img_name:
@@ -86,7 +108,7 @@ class Dataset(object):
                 y = torch.zeros(1).float()
                 chosen = wrong_img_name
 
-            window_fnames = self.get_window(chosen)
+            window_fnames = self.get_window(chosen) # get a seuquence of frames with syncnet_T window size
             if window_fnames is None:
                 continue
 
@@ -98,6 +120,7 @@ class Dataset(object):
                     all_read = False
                     break
                 try:
+                    # resize image to fit model (96x96)
                     img = cv2.resize(img, (hparams.img_size, hparams.img_size))
                 except Exception as e:
                     all_read = False
@@ -111,19 +134,19 @@ class Dataset(object):
                 wavpath = join(vidname, "audio.wav")
                 wav = audio.load_wav(wavpath, hparams.sample_rate)
 
-                orig_mel = audio.melspectrogram(wav).T
+                orig_mel = audio.melspectrogram(wav).T # return a melsprectogram (hp.num_mels x (80 * audio duration))
             except Exception as e:
                 continue
-
+            
+            # return mel spectrogram relevant to the selected frame window
             mel = self.crop_audio_window(orig_mel.copy(), img_name)
 
             if (mel.shape[0] != syncnet_mel_step_size):
                 continue
 
-            # H x W x 3 * T
-            x = np.concatenate(window, axis=2) / 255.
-            x = x.transpose(2, 0, 1)
-            x = x[:, x.shape[1]//2:]
+            x = np.concatenate(window, axis=2) / 255. # H x W x 3 * T
+            x = x.transpose(2, 0, 1) # 3 * T x H x W
+            x = x[:, x.shape[1]//2:] # 3 * T x H//2 (lower part) x W -> get lower part of image (lips)
 
             x = torch.FloatTensor(x)
             mel = torch.FloatTensor(mel.T).unsqueeze(0)
