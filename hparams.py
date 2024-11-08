@@ -2,6 +2,10 @@ from glob import glob
 import os
 
 def get_image_list(data_root, split):
+	'''
+	data_root (str): path of processed data (frames with audio)
+	split (str): name of txt file (train/test)
+	'''
 	filelist = []
 
 	with open('filelists/{}.txt'.format(split)) as f:
