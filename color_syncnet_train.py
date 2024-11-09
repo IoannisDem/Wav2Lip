@@ -31,7 +31,7 @@ global_epoch = 0
 use_cuda = torch.cuda.is_available()
 print('use_cuda: {}'.format(use_cuda))
 
-syncnet_T = 5 # define window size for ......
+syncnet_T = 5 # define window size of interet
 syncnet_mel_step_size = 16 # window size equivalent for mel spectrogram = 80 * (syncnet_T/fps)
 
 class Dataset(object):
@@ -162,7 +162,9 @@ def cosine_loss(a, v, y):
 
 def train(device, model, train_data_loader, test_data_loader, optimizer,
           checkpoint_dir=None, checkpoint_interval=None, nepochs=None):
-
+    '''
+    Train the model and save model weight checkpoints
+    '''
     global global_step, global_epoch
     resumed_step = global_step
     
@@ -178,7 +180,7 @@ def train(device, model, train_data_loader, test_data_loader, optimizer,
 
             mel = mel.to(device)
 
-            a, v = model(mel, x)
+            a, v = model(mel, x) # pass mel spectrogram and half-frames
             y = y.to(device)
 
             loss = cosine_loss(a, v, y)
@@ -202,6 +204,9 @@ def train(device, model, train_data_loader, test_data_loader, optimizer,
         global_epoch += 1
 
 def eval_model(test_data_loader, global_step, device, model, checkpoint_dir):
+    '''
+    Tes the model
+    '''
     eval_steps = 1400
     print('Evaluating for {} steps'.format(eval_steps))
     losses = []
