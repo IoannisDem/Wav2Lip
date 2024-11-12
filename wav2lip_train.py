@@ -100,6 +100,12 @@ class Dataset(object):
         return spec[start_idx : end_idx, :]
 
     def get_segmented_mels(self, spec, start_frame):
+        '''
+        spec (np.array): melsprectogram (hp.num_mels x (80 * audio duration))
+        start_frame (str): frame path
+
+        return list of numpay melspectogram arrays for each frame ahead, considering the window size condition is satisfied
+        '''
         mels = []
         assert syncnet_T == 5
         start_frame_num = self.get_frame_id(start_frame) + 1 # 0-indexing ---> 1-indexing
@@ -169,7 +175,7 @@ class Dataset(object):
             if (mel.shape[0] != syncnet_mel_step_size):
                 continue
 
-            indiv_mels = self.get_segmented_mels(orig_mel.copy(), img_name)
+            indiv_mels = self.get_segmented_mels(orig_mel.copy(), img_name) # list of melespectogram arrays
             if indiv_mels is None: continue
 
             window = self.prepare_window(window)
