@@ -39,12 +39,17 @@ syncnet_mel_step_size = 16
 
 class Dataset(object):
     def __init__(self, split):
-        self.all_videos = get_image_list(args.data_root, split)
+        self.all_videos = get_image_list(args.data_root, split) # get full path of extracted frames and audio
 
     def get_frame_id(self, frame):
         return int(basename(frame).split('.')[0])
 
     def get_window(self, start_frame):
+        '''
+        start_frame (str): frame path (.jpg)
+
+        return a list of frame paths with window size = syncnet_T
+        '''
         start_id = self.get_frame_id(start_frame)
         vidname = dirname(start_frame)
 
@@ -57,6 +62,11 @@ class Dataset(object):
         return window_fnames
 
     def read_window(self, window_fnames):
+        ''''
+        window_frames (list): list of paths 
+
+        return list of numpy arrays (frames)
+        '''
         if window_fnames is None: return None
         window = []
         for fname in window_fnames:
@@ -73,6 +83,12 @@ class Dataset(object):
         return window
 
     def crop_audio_window(self, spec, start_frame):
+        '''
+        spec (numpy.array): melspectrogram 113x80
+        start_frmae (str): frame path (.jpg)
+
+        return portion of mel spectorgram relevant to selected frame window
+        '''
         if type(start_frame) == int:
             start_frame_num = start_frame
         else:
@@ -113,24 +129,29 @@ class Dataset(object):
             idx = random.randint(0, len(self.all_videos) - 1)
             vidname = self.all_videos[idx]
             img_names = list(glob(join(vidname, '*.jpg')))
+
+            # if num of frames less than a threshold skip the iteration
             if len(img_names) <= 3 * syncnet_T:
                 continue
             
-            img_name = random.choice(img_names)
-            wrong_img_name = random.choice(img_names)
+            img_name = random.choice(img_names) # select a random frame
+            wrong_img_name = random.choice(img_names) # select a random frame ....
+
             while wrong_img_name == img_name:
                 wrong_img_name = random.choice(img_names)
 
-            window_fnames = self.get_window(img_name)
-            wrong_window_fnames = self.get_window(wrong_img_name)
+            window_fnames = self.get_window(img_name) # get a sequence of frames with syncnet_T window size
+            wrong_window_fnames = self.get_window(wrong_img_name) # get a sequence of frames with syncnet_T window size
+            
+            # skip if not enough frames are extracted 
             if window_fnames is None or wrong_window_fnames is None:
                 continue
 
-            window = self.read_window(window_fnames)
+            window = self.read_window(window_fnames) # read and process frames/return list of arrays
             if window is None:
                 continue
 
-            wrong_window = self.read_window(wrong_window_fnames)
+            wrong_window = self.read_window(wrong_window_fnames) # read and process frames/return list of arrays
             if wrong_window is None:
                 continue
 
@@ -138,10 +159,11 @@ class Dataset(object):
                 wavpath = join(vidname, "audio.wav")
                 wav = audio.load_wav(wavpath, hparams.sample_rate)
 
-                orig_mel = audio.melspectrogram(wav).T
+                orig_mel = audio.melspectrogram(wav).T # return a melsprectogram (hp.num_mels x (80 * audio duration))
             except Exception as e:
                 continue
-
+            
+            # return mel spectrogram relevant to the selected frame window
             mel = self.crop_audio_window(orig_mel.copy(), img_name)
             
             if (mel.shape[0] != syncnet_mel_step_size):
