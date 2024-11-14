@@ -5,6 +5,8 @@ def get_image_list(data_root, split):
 	'''
 	data_root (str): path of processed data (frames with audio)
 	split (str): name of txt file (train/test)
+
+	return list of full paths for the raw content
 	'''
 	filelist = []
 
@@ -91,8 +93,8 @@ hparams = HParams(
     syncnet_wt=0.0, # is initially zero, will be set automatically to 0.03 later. Leads to faster convergence. 
 	syncnet_batch_size=64,
 	syncnet_lr=1e-4,
-	syncnet_eval_interval=10000,
-	syncnet_checkpoint_interval=10000,
+	syncnet_eval_interval=1000,
+	syncnet_checkpoint_interval=1000,
 
 	disc_wt=0.07,
 	disc_initial_learning_rate=1e-4,
