@@ -227,6 +227,10 @@ def get_sync_loss(mel, g):
 
 def train(device, model, train_data_loader, test_data_loader, optimizer,
           checkpoint_dir=None, checkpoint_interval=None, nepochs=None):
+    '''
+    part of the paper contribution is to use an input in the identity encoder, a random frame R 
+    concatenated with a pose-prior P (target face with lower-half masked)
+    '''
 
     global global_step, global_epoch
     resumed_step = global_step
@@ -245,10 +249,11 @@ def train(device, model, train_data_loader, test_data_loader, optimizer,
             indiv_mels = indiv_mels.to(device)
             gt = gt.to(device)
 
+            # enables model  to learn general info on the audio content
             g = model(indiv_mels, x)
 
             if hparams.syncnet_wt > 0.:
-                sync_loss = get_sync_loss(mel, g)
+                sync_loss = get_sync_loss(mel, g) # using expect sync model to evaluate how good the generator (frames) match the ground truth melspectrogram
             else:
                 sync_loss = 0.
 
